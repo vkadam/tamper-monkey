@@ -27,7 +27,7 @@ var JiraDashboard = (function() {
             document.head.appendChild(style);
 
             stylesheet = style.sheet;
-        }
+        };
 
         this.addRule = function(selector, rule) {
             if (stylesheet.addRule) {
@@ -35,7 +35,7 @@ var JiraDashboard = (function() {
             } else if (stylesheet.insertRule) {
                 stylesheet.insertRule(selector + ' { ' + rule + ' }', stylesheet.cssRules.length);
             }
-        }
+        };
         return this;
     })();
 
@@ -44,37 +44,58 @@ var JiraDashboard = (function() {
     jiraStylesheet.addRule('#announcement-banner', 'display:none !important');
     jiraStylesheet.addRule('#js-filter-toggle .ghx-icon', 'background-position:5px -547px');
     jiraStylesheet.addRule('.closed .ghx-icon', 'background-position:-20px -547px !important');
+    jiraStylesheet.addRule('.ghx-column-headers .ghx-column', 'padding-bottom: 3px !important; padding-top: 3px !important');
+    jiraStylesheet.addRule('.ghx-swimlane-header .ghx-heading', 'font-weight: bolder');
 
+    function resizeWorkdiv() {
+        var $window = jQuery(window),
+            $header = jQuery('#header .aui-header'),
+            $announcement = jQuery('#announcement-banner'),
+            $dashboardTitle = jQuery('#ghx-header'),
+            $filters = jQuery('#ghx-operations'),
+            $workDiv = jQuery('#ghx-work'),
+            headersHeight = 15;
+
+        jQuery.each([$header, $announcement, $dashboardTitle, $filters], function(idx, ele) {
+            // console.log(ele.attr('id'), ele.height(), ele.is(':visible'));
+            if (ele.is(':visible')) {
+                headersHeight += ele.outerHeight();
+            }
+        });
+        // console.log('window height', $window.height(), 'headersHeight', headersHeight, 'work div height', $workDiv.height(), 'new height',$window.height() - headersHeight);
+        $workDiv.height($window.height() - headersHeight);
+        // console.log('jira dashboard workspace resized');
+    }
 
     function createFilterToggle() {
         var toggleFilter,
             filterDiv = jQuery('#ghx-operations'),
-            workDiv = jQuery('#ghx-work'),
             ghxPoolDiv = jQuery('#ghx-pool'),
-            ghxColumnHeaderGroupDiv = jQuery('#ghx-column-header-group');
-        toggleFilter = jQuery('#js-compact-toggle').clone();
+            ghxColumnHeaderGroupDiv = jQuery('#ghx-column-header-group'),
+            compactToggle = jQuery('#js-compact-toggle'),
+            header = jQuery('#header');
+        toggleFilter = compactToggle.clone();
         toggleFilter.attr('id', 'js-filter-toggle');
 
         var setLastValues = false,
             ghxPoolLastPadding,
             ghxColumnHeaderGroupLastTop,
-            workDivHeight;
+            lastVisibility = GM_getValue('jiraHeaderVisible');
 
         toggleFilter.on('click', function() {
+            if (header.is(':visible')) {
+                compactToggle.click();
+            }
             /* Show filter div */
-            workDivHeight = workDiv.height();
             if (setLastValues) {
                 filterDiv.show();
-                workDivHeight -= filterDiv.height();
-                workDivHeight -= 20;
                 ghxPoolDiv.css('padding-top', ghxPoolLastPadding);
                 ghxColumnHeaderGroupDiv.css('top', ghxColumnHeaderGroupLastTop);
                 setLastValues = false;
+                GM_setValue('jiraHeaderVisible', true);
             }
             /* Hide filter div */
             else {
-                workDivHeight += filterDiv.height();
-                workDivHeight += 20;
                 filterDiv.hide();
                 ghxPoolLastPadding = ghxPoolDiv.css('padding-top');
                 ghxColumnHeaderGroupLastTop = ghxColumnHeaderGroupDiv.css('top');
@@ -82,19 +103,37 @@ var JiraDashboard = (function() {
                 setLastValues = true;
                 ghxPoolDiv.css('padding-top', 0);
                 ghxColumnHeaderGroupDiv.css('top', '0px');
+                GM_setValue('jiraHeaderVisible', false);
             }
-            workDiv.height(workDivHeight);
             toggleFilter.toggleClass('closed');
-            jQuery(document).trigger('resize');
-        })
+            resizeWorkdiv();
+        });
 
         jQuery('#ghx-column-header-group').prepend(toggleFilter);
+        setTimeout(function(){
+            if (!lastVisibility) {
+                toggleFilter.click();
+            };
+        }, 100);
+    }
+
+    function windowResizeEvent() {
+        var $window = jQuery(window);
+        $window.off('resize').on('resize', resizeWorkdiv);
+    }
+    
+    function swimlaneExpanderEvent() {
+        jQuery('#ghx-pool').on('click', 'div.ghx-expander.js-expander', function(){
+        	setTimeout(resizeWorkdiv, 100);
+        });
     }
 
     function nodeInsertedEvent(event) {
         var target = jQuery(event.target);
         if (target.attr('id') === 'ghx-column-header-group') {
             createFilterToggle();
+            windowResizeEvent();
+            swimlaneExpanderEvent();
         }
     }
 
